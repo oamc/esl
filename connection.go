@@ -42,10 +42,11 @@ func NewConnection(host string, handler ConnectionHandler) (*Connection, error) 
 		Password: "ClueCon",
 		Timeout:  3 * time.Second,
 		Handler:  handler,
+		MaxRetries: 3,
 	}
 	con.cmdReply = make(chan *Event)
 	con.apiResp = make(chan *Event)
-	err := con.ConnectRetry(3)
+	err := con.Dial()
 	if err != nil {
 		return nil, fmt.Errorf("connect: %v", err)
 	}
@@ -150,15 +151,10 @@ func (con *Connection) ExecuteSync(app string, uuid string, params ...string) (*
 	return cmd.Execute(con)
 }
 
-func (con *Connection) ConnectRetry(MaxRetries int) error {
-	for retries := 1; !con.Connected && retries <= MaxRetries; retries++ {
+func (con *Connection) Dial() error {
+	for retries := 1; !con.Connected && retries <= con.MaxRetries; retries++ {
 		c, err := net.DialTimeout("tcp", con.Address, con.Timeout)
-		if err != nil {
-			if retries == MaxRetries {
-				return fmt.Errorf("last dial attempt: %v", err)
-			}
-			log.Printf("NOTICE: dial attempt #%d: %v, retrying\n", retries, err)
-		} else {
+		if err == nil {
 			con.socket = c
 			break
 		}
